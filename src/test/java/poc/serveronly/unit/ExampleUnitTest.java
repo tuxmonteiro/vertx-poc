@@ -1,6 +1,7 @@
 package poc.serveronly.unit;
 
-import poc.serveronly.SimpleServer;
+import poc.vertx.SimpleServer;
+
 import org.junit.Test;
 
 /*
