@@ -1,5 +1,6 @@
 package poc.vertx;
 
+import java.util.HashMap;
 import java.util.HashSet;
 
 import org.vertx.java.core.Handler;
@@ -17,6 +18,14 @@ public class SimpleServer extends Verticle {
 
      final HashSet<HttpClient> clients = new HashSet<>();
      clients.add(vertx.createHttpClient().setHost("10.249.51.2").setPort(80));
+     clients.add(vertx.createHttpClient().setHost("10.249.51.3").setPort(80));
+     final HashSet<HttpClient> clients2 = new HashSet<>();
+     clients2.add(vertx.createHttpClient().setHost("10.249.51.4").setPort(80));
+     clients2.add(vertx.createHttpClient().setHost("10.249.51.5").setPort(80));
+
+     final HashMap<String, HashSet<HttpClient>> vhosts = new HashMap<>();
+     vhosts.put("teste.qa02.globoi.com:8080", clients);
+     vhosts.put("teste2.qa02.globoi.com:8080", clients2);
 
 //    final HttpClient client = vertx.createHttpClient().setHost("127.0.0.1").setPort(8081);
 
@@ -26,7 +35,8 @@ public class SimpleServer extends Verticle {
         public void handle(final HttpServerRequest sRequest) {
             sRequest.response().setChunked(true);
 
-            final HttpClientRequest cReq = ((HttpClient) clients.toArray()[0]).request(sRequest.method(), sRequest.uri(),
+            String header = sRequest.headers().get("Host");
+            final HttpClientRequest cReq = ((HttpClient) vhosts.get(header).toArray()[getChoice(clients.size())]).request(sRequest.method(), sRequest.uri(),
                     new Handler<HttpClientResponse>() {
 
                 public void handle(HttpClientResponse cResponse) {
@@ -56,6 +66,11 @@ public class SimpleServer extends Verticle {
                 }
               });
 
+        }
+
+        private int getChoice(int size) {
+            int choice = (int) (Math.random() * (size - Float.MIN_VALUE));
+            return choice;
         }
     }).listen(8080);
   }
