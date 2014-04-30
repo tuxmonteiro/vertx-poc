@@ -16,18 +16,26 @@ public class SimpleServer extends Verticle {
 
   public void start() {
 
-     final HashSet<HttpClient> clients = new HashSet<>();
-     clients.add(vertx.createHttpClient().setHost("10.249.51.2").setPort(80));
-     clients.add(vertx.createHttpClient().setHost("10.249.51.3").setPort(80));
-     final HashSet<HttpClient> clients2 = new HashSet<>();
-     clients2.add(vertx.createHttpClient().setHost("10.249.51.4").setPort(80));
-     clients2.add(vertx.createHttpClient().setHost("10.249.51.5").setPort(80));
+      boolean local = false;
+
+      final HashSet<HttpClient> clients = new HashSet<>();
+      final HashSet<HttpClient> clients2 = new HashSet<>();
+
+      if (local) {
+          clients.add(vertx.createHttpClient().setHost("127.0.0.1").setPort(8081));
+          clients.add(vertx.createHttpClient().setHost("127.0.0.1").setPort(8082));
+          clients2.add(vertx.createHttpClient().setHost("127.0.0.1").setPort(8083));
+          clients2.add(vertx.createHttpClient().setHost("127.0.0.1").setPort(8084));
+      } else {
+          clients.add(vertx.createHttpClient().setHost("10.249.51.2").setPort(80));
+          clients.add(vertx.createHttpClient().setHost("10.249.51.3").setPort(80));
+          clients2.add(vertx.createHttpClient().setHost("10.249.51.4").setPort(80));
+          clients2.add(vertx.createHttpClient().setHost("10.249.51.5").setPort(80));
+      }
 
      final HashMap<String, HashSet<HttpClient>> vhosts = new HashMap<>();
      vhosts.put("teste.qa02.globoi.com:8080", clients);
      vhosts.put("teste2.qa02.globoi.com:8080", clients2);
-
-//    final HttpClient client = vertx.createHttpClient().setHost("127.0.0.1").setPort(8081);
 
       vertx.createHttpServer().requestHandler(new Handler<HttpServerRequest>() {
 
