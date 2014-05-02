@@ -9,6 +9,7 @@ import org.vertx.java.core.http.HttpClient;
 import org.vertx.java.core.http.HttpClientRequest;
 import org.vertx.java.core.http.HttpClientResponse;
 import org.vertx.java.core.http.HttpServerRequest;
+import org.vertx.java.core.json.JsonObject;
 import org.vertx.java.core.streams.Pump;
 import org.vertx.java.platform.Verticle;
 
@@ -16,7 +17,8 @@ public class SimpleServer extends Verticle {
 
   public void start() {
 
-      boolean local = false;
+      boolean local = true;
+      final JsonObject conf = container.config();
 
       final HashSet<HttpClient> clients = new HashSet<>();
       final HashSet<HttpClient> clients2 = new HashSet<>();
@@ -63,8 +65,7 @@ public class SimpleServer extends Verticle {
                         }
                     });
                 }
-            })
-                .setChunked(true);
+            }).setChunked(true);
 
             Pump.createPump(sRequest, cReq).start();
 
@@ -80,6 +81,6 @@ public class SimpleServer extends Verticle {
             int choice = (int) (Math.random() * (size - Float.MIN_VALUE));
             return choice;
         }
-    }).listen(8080);
+    }).listen(conf.getInteger("port",8080));
   }
 }
