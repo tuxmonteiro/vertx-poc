@@ -36,8 +36,8 @@ public class SimpleServer extends Verticle {
       }
 
      final HashMap<String, HashSet<HttpClient>> vhosts = new HashMap<>();
-     vhosts.put("teste.qa02.globoi.com:8080", clients);
-     vhosts.put("teste2.qa02.globoi.com:8080", clients2);
+     vhosts.put("teste.qa02.globoi.com", clients);
+     vhosts.put("teste2.qa02.globoi.com", clients2);
 
       vertx.createHttpServer().requestHandler(new Handler<HttpServerRequest>() {
 
@@ -45,7 +45,7 @@ public class SimpleServer extends Verticle {
         public void handle(final HttpServerRequest sRequest) {
             sRequest.response().setChunked(true);
 
-            String header = sRequest.headers().get("Host");
+            String header = sRequest.headers().get("Host").split(":")[0];
             final HttpClientRequest cReq = ((HttpClient) vhosts.get(header).toArray()[getChoice(clients.size())]).request(sRequest.method(), sRequest.uri(),
                     new Handler<HttpClientResponse>() {
 
