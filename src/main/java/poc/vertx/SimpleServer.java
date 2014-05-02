@@ -17,7 +17,7 @@ public class SimpleServer extends Verticle {
 
   public void start() {
 
-      boolean local = true;
+      boolean local = false;
       final JsonObject conf = container.config();
 
       final HashSet<HttpClient> clients = new HashSet<>();
