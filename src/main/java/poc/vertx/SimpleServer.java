@@ -29,8 +29,8 @@ public class SimpleServer extends Verticle {
           clients2.add(vertx.createHttpClient().setHost("127.0.0.1").setPort(8083));
           clients2.add(vertx.createHttpClient().setHost("127.0.0.1").setPort(8084));
       } else {
-          clients.add(vertx.createHttpClient().setHost("10.249.51.2").setPort(80));
-          clients.add(vertx.createHttpClient().setHost("10.249.51.3").setPort(80));
+          clients.add(vertx.createHttpClient().setHost("10.248.92.35").setPort(80));
+          clients.add(vertx.createHttpClient().setHost("10.248.92.36").setPort(80));
           clients2.add(vertx.createHttpClient().setHost("10.249.51.4").setPort(80));
           clients2.add(vertx.createHttpClient().setHost("10.249.51.5").setPort(80));
       }
