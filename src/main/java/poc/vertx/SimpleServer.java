@@ -30,15 +30,15 @@ public class SimpleServer extends Verticle {
 
       boolean local = conf.containsField("local");
       if (local) {
-          clients.add(new Client().setHost("127.0.0.1").setPort(8081));
-          clients.add(new Client().setHost("127.0.0.1").setPort(8082));
-          clients2.add(new Client().setHost("127.0.0.1").setPort(8083));
-          clients2.add(new Client().setHost("127.0.0.1").setPort(8084));
+          clients.add(new Client("127.0.0.1:8081"));
+          clients.add(new Client("127.0.0.1:8082"));
+          clients2.add(new Client("127.0.0.1:8083"));
+          clients2.add(new Client("127.0.0.1:8084"));
       } else {
-          clients.add(new Client().setHost("10.248.92.35").setPort(80));
-          clients.add(new Client().setHost("10.248.92.36").setPort(80));
-          clients2.add(new Client().setHost("10.249.51.4").setPort(80));
-          clients2.add(new Client().setHost("10.249.51.5").setPort(80));
+          clients.add(new Client("10.248.92.35:80"));
+          clients.add(new Client("10.248.92.36:80"));
+          clients2.add(new Client("10.249.51.4:80"));
+          clients2.add(new Client("10.249.51.5:80"));
       }
 
      final HashMap<String, HashSet<Client>> vhosts = new HashMap<>();
@@ -63,7 +63,7 @@ public class SimpleServer extends Verticle {
                     (!sRequest.headers().get("Connection").equals("close")) && supportKeepAlive : 
                     sRequest.version().equals(HttpVersion.HTTP_1_1) && supportKeepAlive;
 
-            final Client client = ((Client) vhosts.get(headerHost).toArray()[getChoice(clients.size())])
+            final Client client = ((Client)vhosts.get(headerHost).toArray()[getChoice(clients.size())])
                     .setKeepAlive(connectionKeepalive)
                     .setKeepAliveTimeOut(keepAliveTimeOut)
                     .setKeepAliveMaxRequest(keepAliveMaxRequest)
@@ -87,9 +87,11 @@ public class SimpleServer extends Verticle {
                                 if (connectionKeepalive) {
                                     if (client.isKeepAliveLimit()) {
                                         serverNormalClose(sRequest);
+                                        client.close();
                                     }
                                 } else {
                                     serverNormalClose(sRequest);
+                                    client.close();
                                 }
                             }
                         });
@@ -97,8 +99,9 @@ public class SimpleServer extends Verticle {
                         cResponse.exceptionHandler(new Handler<Throwable>() {
                             @Override
                             public void handle(Throwable event) {
-                                System.err.println(event.getMessage());
+//                                System.err.println(event.getMessage());
                                 serverShowErrorAndClose(sRequest, event);
+                                client.close();
                             }
                         });
                 }
@@ -106,7 +109,7 @@ public class SimpleServer extends Verticle {
 
             sRequest.response().setChunked(true);
 
-            final HttpClientRequest cRequest = client.getClient()
+            final HttpClientRequest cRequest = client.connect()
                     .request(sRequest.method(), sRequest.uri(),handlerHttpClientResponse)
                     .setChunked(true);
 
@@ -119,6 +122,7 @@ public class SimpleServer extends Verticle {
                 public void handle(Throwable event) {
                     System.err.println(event.getMessage());
                     serverShowErrorAndClose(sRequest, event);
+                    client.close();
                 }
              });
 
@@ -156,14 +160,14 @@ public class SimpleServer extends Verticle {
           sRequest.response().end();
       } catch (java.lang.IllegalStateException e) {
           // Response has already been written ?
-          System.err.println(e.getMessage());
+//          System.err.println(e.getMessage());
       }
 
       try {
           sRequest.response().close();
       } catch (RuntimeException e) {
           // Socket null or already closed
-          System.err.println(e.getMessage());
+//          System.err.println(e.getMessage());
       }
   }
 
@@ -186,16 +190,20 @@ public class SimpleServer extends Verticle {
       private Long keepAliveTimeOut;
       private Long requestCount;
 
-      public Client() {
+      public Client(final String hostWithPort) {
           this.client = null;
-          this.host = "127.0.0.1";
-          this.port = 80;
+          this.host = hostWithPort.split(":")[0];
+          this.port = Integer.parseInt(hostWithPort.split(":")[1]);
           this.timeout = 60000;
           this.keepalive = true;
           this.keepAliveMaxRequest = Long.MAX_VALUE-1;
           this.keepAliveTimeMark = System.currentTimeMillis();
           this.keepAliveTimeOut = 86400000L; // One day
           this.requestCount = 0L;
+      }
+
+      public Client() {
+          this("127.0.0.1:80");
       }
 
       public String getHost() {
@@ -269,8 +277,8 @@ public class SimpleServer extends Verticle {
           return false;
       }
 
-    // Lazy initialization
-      public HttpClient getClient() {
+      // Lazy initialization
+      public HttpClient connect() {
           if (client==null) {
               client = vertx.createHttpClient()
                   .setKeepAlive(keepalive)
@@ -281,7 +289,7 @@ public class SimpleServer extends Verticle {
               client.exceptionHandler(new Handler<Throwable>() {
                 @Override
                 public void handle(Throwable e) {
-                    System.err.println(e.getMessage());
+//                    System.err.println(e.getMessage());
                 }
               });
           }
@@ -294,9 +302,12 @@ public class SimpleServer extends Verticle {
                   client.close();
               } catch (IllegalStateException e) {
                   // Already closed
-                  System.err.println(e.getMessage());
-              }          }
-          client=null;
+//                  System.err.println(e.getMessage());
+              } finally {
+                  client=null;
+              }
+          }
       }
   }
+
 }
