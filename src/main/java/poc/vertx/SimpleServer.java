@@ -24,6 +24,7 @@ public class SimpleServer extends Verticle {
       final Long keepAliveMaxRequest = conf.getLong("maxKeepAliveRequests", 100L);
       final Integer clientRequestTimeOut = conf.getInteger("clientRequestTimeOut", 60000);
       final Integer clientConnectionTimeOut = conf.getInteger("clientConnectionTimeOut", 60000);
+      final Boolean clientForceKeepAlive = conf.getBoolean("clientForceKeepAlive", false);
 
       final HashSet<Client> clients = new HashSet<>();
       final HashSet<Client> clients2 = new HashSet<>();
@@ -46,7 +47,6 @@ public class SimpleServer extends Verticle {
      vhosts.put("teste2.qa02.globoi.com", clients2);
 
      final Handler<HttpServerRequest> handlerHttpServerRequest = new Handler<HttpServerRequest>() {
-
         @Override
         public void handle(final HttpServerRequest sRequest) {
 
@@ -64,7 +64,7 @@ public class SimpleServer extends Verticle {
                     sRequest.version().equals(HttpVersion.HTTP_1_1) && supportKeepAlive;
 
             final Client client = ((Client)vhosts.get(headerHost).toArray()[getChoice(clients.size())])
-                    .setKeepAlive(connectionKeepalive)
+                    .setKeepAlive(connectionKeepalive||clientForceKeepAlive)
                     .setKeepAliveTimeOut(keepAliveTimeOut)
                     .setKeepAliveMaxRequest(keepAliveMaxRequest)
                     .setConnectionTimeout(clientConnectionTimeOut);
@@ -91,7 +91,9 @@ public class SimpleServer extends Verticle {
                                     }
                                 } else {
                                     serverNormalClose(sRequest);
-                                    client.close();
+                                    if (!clientForceKeepAlive) {
+                                        client.close();
+                                    }
                                 }
                             }
                         });
@@ -115,6 +117,9 @@ public class SimpleServer extends Verticle {
 
             // Pump sRequest => cRequest
             cRequest.headers().set(sRequest.headers());
+            if (clientForceKeepAlive && cRequest.headers().contains("Connection")) {
+                cRequest.headers().set("Connection", "keep-alive");
+            }
             Pump.createPump(sRequest, cRequest).start();
 
             cRequest.exceptionHandler(new Handler<Throwable>() {
