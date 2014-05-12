@@ -19,12 +19,13 @@ public class SimpleServer extends Verticle {
   public void start() {
 
       final JsonObject conf = container.config();
-      final Boolean supportKeepAlive = conf.getBoolean("supportKeepAlive", true);
       final Long keepAliveTimeOut = conf.getLong("keepAliveTimeOut", 2000L);
       final Long keepAliveMaxRequest = conf.getLong("maxKeepAliveRequests", 100L);
       final Integer clientRequestTimeOut = conf.getInteger("clientRequestTimeOut", 60000);
       final Integer clientConnectionTimeOut = conf.getInteger("clientConnectionTimeOut", 60000);
       final Boolean clientForceKeepAlive = conf.getBoolean("clientForceKeepAlive", false);
+      final Integer clientMaxPoolSize = conf.getInteger("clientMaxPoolSize",1);
+      final Long serverIdleTimeOut = conf.getLong("serverIdleTimeOut", 20000L); 
 
       final HashSet<Client> clients = new HashSet<>();
       final HashSet<Client> clients2 = new HashSet<>();
@@ -60,14 +61,18 @@ public class SimpleServer extends Verticle {
             String headerHost = sRequest.headers().get("Host").split(":")[0];
 
             final boolean connectionKeepalive = sRequest.headers().contains("Connection") ?
-                    (!sRequest.headers().get("Connection").equals("close")) && supportKeepAlive : 
-                    sRequest.version().equals(HttpVersion.HTTP_1_1) && supportKeepAlive;
+                    (!sRequest.headers().get("Connection").equals("close")) : 
+                    sRequest.version().equals(HttpVersion.HTTP_1_1);
 
             final Client client = ((Client)vhosts.get(headerHost).toArray()[getChoice(clients.size())])
                     .setKeepAlive(connectionKeepalive||clientForceKeepAlive)
                     .setKeepAliveTimeOut(keepAliveTimeOut)
                     .setKeepAliveMaxRequest(keepAliveMaxRequest)
-                    .setConnectionTimeout(clientConnectionTimeOut);
+                    .setConnectionTimeout(clientConnectionTimeOut)
+                    .setIdleTimeOut(serverIdleTimeOut)
+                    .setMaxPoolSize(clientMaxPoolSize);
+
+            client.cancelIdleMonitor();
 
             final Handler<HttpClientResponse> handlerHttpClientResponse = new Handler<HttpClientResponse>() {
 
@@ -84,6 +89,7 @@ public class SimpleServer extends Verticle {
                             @Override
                             public void handle() {
                                 sRequest.response().end();
+                                client.startIdleMonitor(sRequest);
                                 if (connectionKeepalive) {
                                     if (client.isKeepAliveLimit()) {
                                         serverNormalClose(sRequest);
@@ -115,11 +121,11 @@ public class SimpleServer extends Verticle {
                     .request(sRequest.method(), sRequest.uri(),handlerHttpClientResponse)
                     .setChunked(true);
 
-            // Pump sRequest => cRequest
             cRequest.headers().set(sRequest.headers());
-            if (clientForceKeepAlive && cRequest.headers().contains("Connection")) {
+            if (clientForceKeepAlive) {
                 cRequest.headers().set("Connection", "keep-alive");
             }
+            // Pump sRequest => cRequest
             Pump.createPump(sRequest, cRequest).start();
 
             cRequest.exceptionHandler(new Handler<Throwable>() {
@@ -134,7 +140,7 @@ public class SimpleServer extends Verticle {
             sRequest.endHandler(new VoidHandler() {
                 @Override
                 public void handle() {
-                  cRequest.end();
+                    cRequest.end();
                 }
              });
         }
@@ -188,6 +194,9 @@ public class SimpleServer extends Verticle {
       private String host;
       private Integer port;
       private Integer timeout;
+      private Integer maxPoolSize;
+      private Long idleTimeOutTimer;
+      private Long idleTimeOut;
 
       private boolean keepalive;
       private Long keepAliveMaxRequest;
@@ -274,7 +283,7 @@ public class SimpleServer extends Verticle {
           if (requestCount<=keepAliveMaxRequest) {
               requestCount++;
           }
-          if ((requestCount>=keepAliveMaxRequest) || ((keepAliveTimeMark+keepAliveTimeOut)<now)) {
+          if ((requestCount>=keepAliveMaxRequest) || ((now-keepAliveTimeMark))>keepAliveTimeOut) {
               keepAliveTimeMark = now;
               requestCount = 0L;
               return true;
@@ -282,7 +291,42 @@ public class SimpleServer extends Verticle {
           return false;
       }
 
-      // Lazy initialization
+      public Integer getMaxPoolSize() {
+        return maxPoolSize;
+    }
+
+    public Client setMaxPoolSize(Integer maxPoolSize) {
+        this.maxPoolSize = maxPoolSize;
+        return this;
+    }
+
+    public void startIdleMonitor(final HttpServerRequest sRequest) {
+        idleTimeOutTimer = vertx.setTimer(idleTimeOut, new Handler<Long>() {
+            @Override
+            public void handle(Long event) {
+                try {
+                    sRequest.response().close();
+                } catch (Exception e) {}
+            }
+        });
+    }
+
+    public void cancelIdleMonitor() {
+        try {
+            vertx.cancelTimer(idleTimeOutTimer);
+        } catch (java.lang.NullPointerException e) {} // Ignore timer null
+    }
+
+    public Long getIdleTimeOut() {
+        return idleTimeOut;
+    }
+
+    public Client setIdleTimeOut(Long idleTimeOut) {
+        this.idleTimeOut = idleTimeOut;
+        return this;
+    }
+
+    // Lazy initialization
       public HttpClient connect() {
           if (client==null) {
               client = vertx.createHttpClient()
@@ -290,7 +334,8 @@ public class SimpleServer extends Verticle {
                   .setTCPKeepAlive(keepalive)
                   .setConnectTimeout(timeout)
                   .setHost(host)
-                  .setPort(port);
+                  .setPort(port)
+                  .setMaxPoolSize(maxPoolSize);
               client.exceptionHandler(new Handler<Throwable>() {
                 @Override
                 public void handle(Throwable e) {
