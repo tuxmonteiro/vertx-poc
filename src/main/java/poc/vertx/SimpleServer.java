@@ -25,7 +25,6 @@ public class SimpleServer extends Verticle {
       final Integer clientConnectionTimeOut = conf.getInteger("clientConnectionTimeOut", 60000);
       final Boolean clientForceKeepAlive = conf.getBoolean("clientForceKeepAlive", false);
       final Integer clientMaxPoolSize = conf.getInteger("clientMaxPoolSize",1);
-      final Long serverIdleTimeOut = conf.getLong("serverIdleTimeOut", 20000L); 
 
       final HashSet<Client> clients = new HashSet<>();
       final HashSet<Client> clients2 = new HashSet<>();
@@ -69,10 +68,7 @@ public class SimpleServer extends Verticle {
                     .setKeepAliveTimeOut(keepAliveTimeOut)
                     .setKeepAliveMaxRequest(keepAliveMaxRequest)
                     .setConnectionTimeout(clientConnectionTimeOut)
-                    .setIdleTimeOut(serverIdleTimeOut)
                     .setMaxPoolSize(clientMaxPoolSize);
-
-            client.cancelIdleMonitor();
 
             final Handler<HttpClientResponse> handlerHttpClientResponse = new Handler<HttpClientResponse>() {
 
@@ -89,7 +85,6 @@ public class SimpleServer extends Verticle {
                             @Override
                             public void handle() {
                                 sRequest.response().end();
-                                client.startIdleMonitor(sRequest);
                                 if (connectionKeepalive) {
                                     if (client.isKeepAliveLimit()) {
                                         serverNormalClose(sRequest);
@@ -195,8 +190,6 @@ public class SimpleServer extends Verticle {
       private Integer port;
       private Integer timeout;
       private Integer maxPoolSize;
-      private Long idleTimeOutTimer;
-      private Long idleTimeOut;
 
       private boolean keepalive;
       private Long keepAliveMaxRequest;
@@ -297,32 +290,6 @@ public class SimpleServer extends Verticle {
 
     public Client setMaxPoolSize(Integer maxPoolSize) {
         this.maxPoolSize = maxPoolSize;
-        return this;
-    }
-
-    public void startIdleMonitor(final HttpServerRequest sRequest) {
-        idleTimeOutTimer = vertx.setTimer(idleTimeOut, new Handler<Long>() {
-            @Override
-            public void handle(Long event) {
-                try {
-                    sRequest.response().close();
-                } catch (Exception e) {}
-            }
-        });
-    }
-
-    public void cancelIdleMonitor() {
-        try {
-            vertx.cancelTimer(idleTimeOutTimer);
-        } catch (java.lang.NullPointerException e) {} // Ignore timer null
-    }
-
-    public Long getIdleTimeOut() {
-        return idleTimeOut;
-    }
-
-    public Client setIdleTimeOut(Long idleTimeOut) {
-        this.idleTimeOut = idleTimeOut;
         return this;
     }
 
