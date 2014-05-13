@@ -25,6 +25,7 @@ public class SimpleServer extends Verticle {
       final Integer clientConnectionTimeOut = conf.getInteger("clientConnectionTimeOut", 60000);
       final Boolean clientForceKeepAlive = conf.getBoolean("clientForceKeepAlive", false);
       final Integer clientMaxPoolSize = conf.getInteger("clientMaxPoolSize",1);
+      final Long serverResponseTimeout = conf.getLong("serverResponseTimeout",10000L);
 
       final HashSet<Client> clients = new HashSet<>();
       final HashSet<Client> clients2 = new HashSet<>();
@@ -85,13 +86,17 @@ public class SimpleServer extends Verticle {
                             @Override
                             public void handle() {
                                 sRequest.response().end();
+                                vertx.setTimer(serverResponseTimeout, new Handler<Long>() {
+                                    @Override
+                                    public void handle(Long event) {
+                                        serverNormalClose(sRequest);
+                                    }
+                                });
                                 if (connectionKeepalive) {
                                     if (client.isKeepAliveLimit()) {
-                                        serverNormalClose(sRequest);
                                         client.close();
                                     }
                                 } else {
-                                    serverNormalClose(sRequest);
                                     if (!clientForceKeepAlive) {
                                         client.close();
                                     }
