@@ -25,7 +25,7 @@ public class SimpleServer extends Verticle {
       final Integer clientConnectionTimeOut = conf.getInteger("clientConnectionTimeOut", 60000);
       final Boolean clientForceKeepAlive = conf.getBoolean("clientForceKeepAlive", false);
       final Integer clientMaxPoolSize = conf.getInteger("clientMaxPoolSize",1);
-      final Long serverResponseTimeout = conf.getLong("serverResponseTimeout",10000L);
+      final Long serverResponseTimeout = conf.getLong("serverResponseTimeout",1000L);
 
       final HashSet<Client> clients = new HashSet<>();
       final HashSet<Client> clients2 = new HashSet<>();
