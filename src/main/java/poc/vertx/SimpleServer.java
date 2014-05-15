@@ -83,6 +83,9 @@ public class SimpleServer extends Verticle {
 
                         // Pump cResponse => sResponse
                         serverResponse.getResponse().headers().set(cResponse.headers());
+                        if (!connectionKeepalive) {
+                            serverResponse.getResponse().headers().set("Connection", "close");
+                        }
                         Pump.createPump(cResponse, serverResponse.getResponse()).start();
 
                         cResponse.endHandler(new VoidHandler() {
