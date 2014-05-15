@@ -9,6 +9,7 @@ import org.vertx.java.core.http.HttpClient;
 import org.vertx.java.core.http.HttpClientRequest;
 import org.vertx.java.core.http.HttpClientResponse;
 import org.vertx.java.core.http.HttpServerRequest;
+import org.vertx.java.core.http.HttpServerResponse;
 import org.vertx.java.core.http.HttpVersion;
 import org.vertx.java.core.json.JsonObject;
 import org.vertx.java.core.streams.Pump;
@@ -51,10 +52,12 @@ public class SimpleServer extends Verticle {
         @Override
         public void handle(final HttpServerRequest sRequest) {
 
+            final ServerResponse serverResponse = new ServerResponse(sRequest.response().setChunked(true));
+
             final Long requestTimeoutTimer = vertx.setTimer(clientRequestTimeOut, new Handler<Long>() {
                 @Override
                 public void handle(Long event) {
-                    serverShowErrorAndClose(sRequest, new java.util.concurrent.TimeoutException());
+                    serverShowErrorAndClose(serverResponse.getResponse(), new java.util.concurrent.TimeoutException());
                 }
             });
 
@@ -79,19 +82,13 @@ public class SimpleServer extends Verticle {
                         vertx.cancelTimer(requestTimeoutTimer);
 
                         // Pump cResponse => sResponse
-                        sRequest.response().headers().set(cResponse.headers());
-                        Pump.createPump(cResponse, sRequest.response()).start();
+                        serverResponse.getResponse().headers().set(cResponse.headers());
+                        Pump.createPump(cResponse, serverResponse.getResponse()).start();
 
                         cResponse.endHandler(new VoidHandler() {
                             @Override
                             public void handle() {
-                                sRequest.response().end();
-                                vertx.setTimer(serverResponseTimeout, new Handler<Long>() {
-                                    @Override
-                                    public void handle(Long event) {
-                                        serverNormalClose(sRequest);
-                                    }
-                                });
+                                serverResponse.getResponse().end();
                                 if (connectionKeepalive) {
                                     if (client.isKeepAliveLimit()) {
                                         client.close();
@@ -108,14 +105,12 @@ public class SimpleServer extends Verticle {
                             @Override
                             public void handle(Throwable event) {
 //                                System.err.println(event.getMessage());
-                                serverShowErrorAndClose(sRequest, event);
+                                serverShowErrorAndClose(serverResponse.getResponse(), event);
                                 client.close();
                             }
                         });
                 }
             };
-
-            sRequest.response().setChunked(true);
 
             final HttpClientRequest cRequest = client.connect()
                     .request(sRequest.method(), sRequest.uri(),handlerHttpClientResponse)
@@ -132,7 +127,7 @@ public class SimpleServer extends Verticle {
                 @Override
                 public void handle(Throwable event) {
                     System.err.println(event.getMessage());
-                    serverShowErrorAndClose(sRequest, event);
+                    serverShowErrorAndClose(serverResponse.getResponse(), event);
                     client.close();
                 }
              });
@@ -157,35 +152,65 @@ public class SimpleServer extends Verticle {
       return choice;
   }
 
-  private void serverShowErrorAndClose(final HttpServerRequest sRequest, final Throwable event) {
+  private void serverShowErrorAndClose(final HttpServerResponse sResponse, final Throwable event) {
 
       if (event instanceof java.util.concurrent.TimeoutException) {
-          sRequest.response().setStatusCode(504);
-          sRequest.response().setStatusMessage("Gateway Time-Out");
+          sResponse.setStatusCode(504);
+          sResponse.setStatusMessage("Gateway Time-Out");
       } else {
-          sRequest.response().setStatusCode(502);
-          sRequest.response().setStatusMessage("Bad Gateway");
+          sResponse.setStatusCode(502);
+          sResponse.setStatusMessage("Bad Gateway");
       }
 
       try {
-          sRequest.response().end();
+          sResponse.end();
       } catch (java.lang.IllegalStateException e) {
           // Response has already been written ?
 //          System.err.println(e.getMessage());
       }
 
       try {
-          sRequest.response().close();
+          sResponse.close();
       } catch (RuntimeException e) {
           // Socket null or already closed
 //          System.err.println(e.getMessage());
       }
   }
 
-  private void serverNormalClose(final HttpServerRequest sRequest) {
-      try {
-          sRequest.response().close();
-      } catch (Exception e) {} // Ignore "Already Closed" error
+  class ServerResponse {
+
+      private final HttpServerResponse sResponse;
+      private final Long timestamp = System.currentTimeMillis();
+
+      public ServerResponse(final HttpServerResponse sResponse) {
+        this.sResponse = sResponse;
+      }
+
+      // Garbage collector doing the dirty work
+      @Override
+      protected void finalize() throws Throwable {
+          super.finalize();
+          try {
+              sResponse.close();
+          } catch (Exception e) {}
+      }
+
+      protected void checkTimeout(Long nowMinusTimeout) {
+          if (timestamp<nowMinusTimeout) {
+              try {
+                  sResponse.close();
+              } catch (Exception e) {}
+          }
+      }
+
+    public HttpServerResponse getResponse() {
+          return this.sResponse;
+      }
+
+      public Long getTimestamp() {
+          return this.timestamp;
+      }
+
   }
 
   class Client {
